@@ -1,11 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"log"
 	"net"
+	"net/url"
 	"strconv"
+	"strings"
 )
 
 func main(){
@@ -25,6 +28,53 @@ func main(){
 }
 
 func handleClientRequest(c net.Conn){
+	if c==nil{
+		return
+	}
+	defer c.Close()
+	var b [1024]byte
+	n,err:=c.Read(b[:])
+	if err!=nil{
+		log.Println(err)
+		return
+	}
+	//fmt.Println(string(b[:]))
+	var method,host,address string
+	fmt.Sscanf(string(b[:bytes.IndexByte(b[:],'\n')]),"%s%s",&method,&host)
+	fmt.Println(method)
+	//fmt.Println(host)
+	hostPortUrl,err:=url.Parse(host)
+	if err !=nil{
+		log.Println(err)
+		return
+	}
+	fmt.Println(hostPortUrl)
+	if hostPortUrl.Opaque=="443"{
+		address=hostPortUrl.Scheme+":443"
+	}else{
+		if strings.Index(hostPortUrl.Host,":")==-1{
+			address=hostPortUrl.Scheme+":80"
+		}else{
+			address=hostPortUrl.Host
+		}
+	}
+	fmt.Println(address)
+	server,err:=net.Dial("tcp",address)
+	if err!=nil{
+		log.Println(err)
+		return
+	}
+	defer server.Close()
+	if method =="CONNECT"{
+		fmt.Fprint(c, "HTTP/1.1 200 Connection established\r\n\r\n")
+	}else{
+		server.Write(b[:n])
+	}
+	go io.Copy(server,c)
+	io.Copy(c,server)
+}
+
+func doHandleSock5(c net.Conn){
 	if c==nil{
 		return
 	}
